@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consulta de Cédulas</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Herramienta local</p>
+        <h1>Consulta de Cédulas</h1>
+        <p class="subtitle">
+          Sube un Excel con columna de cédula. El archivo se lee solo en tu navegador
+          y se descarga el resultado enriquecido sin guardarse en el servidor.
+        </p>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card upload-card">
+        <h2>1. Archivo Excel</h2>
+        <label class="dropzone" id="dropzone" for="file-input">
+          <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+          <div class="dropzone-content">
+            <span class="dropzone-icon">📄</span>
+            <p id="file-label">Arrastra un .xlsx aquí o haz clic para seleccionar</p>
+            <p class="hint">Columnas detectadas: cédula, cedula, civ, id, identificación…</p>
+          </div>
+        </label>
+
+        <div class="actions">
+          <button id="process-btn" class="btn btn-primary" disabled>Procesar cédulas</button>
+          <button id="download-btn" class="btn btn-secondary" disabled>Descargar Excel</button>
+          <button id="reset-btn" class="btn btn-ghost" disabled>Reiniciar</button>
+        </div>
+
+        <div class="progress-wrap" hidden id="progress-wrap">
+          <div class="progress-meta">
+            <span id="progress-text">0 / 0</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card log-card">
+        <div class="log-header">
+          <h2>2. Resultados</h2>
+          <div class="stats" id="stats">
+            <span class="stat ok">0 encontrados</span>
+            <span class="stat warn">0 no encontrados</span>
+            <span class="stat err">0 errores</span>
+          </div>
+        </div>
+        <div class="log-table-wrap">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>Fila</th>
+                <th>Cédula</th>
+                <th>Estado</th>
+                <th>Nombre</th>
+              </tr>
+            </thead>
+            <tbody id="log-body">
+              <tr class="empty-row">
+                <td colspan="4">Aún no hay consultas.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Solo se envían números de cédula al proxy local para consultar
+        <a href="https://www.sistemaspnp.com/cedula/index.php" target="_blank" rel="noreferrer">sistemaspnp.com</a>.
+        El Excel nunca se sube al servidor.
+      </p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="/lib/excel-utils.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
