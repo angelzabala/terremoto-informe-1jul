@@ -11,6 +11,7 @@ const { consultCedula, REQUEST_DELAY_MS } = require('./lib/cedula-service');
 const {
   prepareSheet,
   applyConsultResult,
+  buildSplitSheets,
 } = require('./lib/excel-utils');
 
 const ROOT_DIR = __dirname;
@@ -29,23 +30,21 @@ function listExcelFiles() {
     .map((fileName) => path.join(ROOT_DIR, fileName));
 }
 
-async function processSheet(rows, sheetName) {
-  const prepared = prepareSheet(rows);
-
-  if (prepared.headerRowIndex === -1 || prepared.cedulaColIndex === -1) {
+async function processSheetState(sheetState, sheetName) {
+  if (sheetState.headerRowIndex === -1 || sheetState.cedulaColIndex === -1) {
     console.warn(`  Hoja "${sheetName}": no se encontró columna de cédula, se omite.`);
-    return prepared.rows;
+    return sheetState;
   }
 
   console.log(
-    `  Hoja "${sheetName}": encabezado fila ${prepared.headerRowIndex + 1}, columna cédula ${prepared.cedulaColIndex + 1}`,
+    `  Hoja "${sheetName}": encabezado fila ${sheetState.headerRowIndex + 1}, columna cédula ${sheetState.cedulaColIndex + 1}`,
   );
 
-  for (const task of prepared.tasks) {
+  for (const task of sheetState.tasks) {
     console.log(`    Fila ${task.rowIndex + 1}: consultando cédula ${task.cedula}...`);
     const result = await consultCedula(task.cedula);
 
-    applyConsultResult(prepared.rows, prepared.startCol, task.rowIndex, result);
+    applyConsultResult(sheetState.rows, sheetState.startCol, task.rowIndex, result);
 
     if (result.status === 'ENCONTRADO') {
       console.log(`      OK: ${result.primerApellido} ${result.segundoApellido}, ${result.nombres}`);
@@ -58,25 +57,40 @@ async function processSheet(rows, sheetName) {
     await sleep(REQUEST_DELAY_MS);
   }
 
-  return prepared.rows;
+  return sheetState;
 }
 
 async function processWorkbook(filePath) {
-  const workbook = XLSX.readFile(filePath);
+  const sourceWorkbook = XLSX.readFile(filePath);
+  const sheetStates = [];
 
-  for (const sheetName of workbook.SheetNames) {
-    const worksheet = workbook.Sheets[sheetName];
+  for (const sheetName of sourceWorkbook.SheetNames) {
+    const worksheet = sourceWorkbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, {
       header: 1,
       defval: '',
       raw: true,
     });
 
-    const updatedRows = await processSheet(rows, sheetName);
-    workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(updatedRows);
+    const sheetState = { sheetName, ...prepareSheet(rows) };
+    sheetStates.push(await processSheetState(sheetState, sheetName));
   }
 
-  return workbook;
+  const splitSheets = buildSplitSheets(sheetStates);
+  const outputWorkbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    outputWorkbook,
+    XLSX.utils.aoa_to_sheet(splitSheets.verifiedRows),
+    splitSheets.verifiedSheetName,
+  );
+  XLSX.utils.book_append_sheet(
+    outputWorkbook,
+    XLSX.utils.aoa_to_sheet(splitSheets.pendingRows),
+    splitSheets.pendingSheetName,
+  );
+
+  return outputWorkbook;
 }
 
 async function main() {

@@ -13,9 +13,24 @@
         <p class="eyebrow">Herramienta local</p>
         <h1>Consulta de Cédulas</h1>
         <p class="subtitle">
-          Sube un Excel con columna de cédula. El archivo se lee solo en tu navegador
-          y se descarga el resultado enriquecido sin guardarse en el servidor.
+          Sube un Excel con una columna de cédula (cédula, cedula, civ, id, identificación…).
+          El archivo se lee solo en tu navegador y nunca se guarda en el servidor.
         </p>
+        <div class="instructions">
+          <p><strong>Cómo funciona:</strong></p>
+          <ol>
+            <li>Selecciona o arrastra tu archivo <code>.xlsx</code>.</li>
+            <li>La herramienta detecta la columna de cédula y consulta cada número en el registro público.</li>
+            <li>Se agregan columnas con RIF, apellidos, nombres y estado CIV.</li>
+            <li>Descargas un Excel con dos pestañas: <strong>CIV verificadas</strong> y <strong>CIV no verificadas</strong>.</li>
+          </ol>
+          <p><strong>Flujo de trabajo recomendado:</strong></p>
+          <ol>
+            <li>Crea un Excel inicial con las columnas que necesites, incluyendo la cédula.</li>
+            <li>Procesa ese archivo aquí para obtener el Excel descargable con los datos personales.</li>
+            <li>Realiza verificaciones manuales y complementa la información en ese archivo resultante.</li>
+          </ol>
+        </div>
       </div>
     </header>
 
@@ -50,12 +65,15 @@
 
       <section class="card log-card">
         <div class="log-header">
-          <h2>2. Resultados</h2>
-          <div class="stats" id="stats">
-            <span class="stat ok">0 encontrados</span>
-            <span class="stat warn">0 no encontrados</span>
-            <span class="stat err">0 errores</span>
+          <div class="log-header-top">
+            <h2>2. Resultados</h2>
+            <div class="stats" id="stats">
+              <button type="button" class="stat stat-filter ok active" data-filter="ok" aria-pressed="true">0 CIV verificadas</button>
+              <button type="button" class="stat stat-filter warn active" data-filter="warn" aria-pressed="true">0 CIV no verificadas</button>
+              <button type="button" class="stat stat-filter err active" data-filter="err" aria-pressed="true">0 errores</button>
+            </div>
           </div>
+          <p class="filter-hint">Clic en un badge para mostrar u ocultar esa categoría.</p>
         </div>
         <div class="log-table-wrap">
           <table class="log-table">

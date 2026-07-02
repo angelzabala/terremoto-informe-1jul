@@ -19,9 +19,18 @@ let outputWorkbook = null;
 let outputFileName = '';
 let processing = false;
 let stats = { ok: 0, warn: 0, err: 0 };
+let activeFilters = { ok: true, warn: true, err: true };
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resetFilters() {
+  activeFilters = { ok: true, warn: true, err: true };
+  statsEl.querySelectorAll('.stat-filter').forEach((button) => {
+    button.classList.add('active');
+    button.setAttribute('aria-pressed', 'true');
+  });
 }
 
 function resetStats() {
@@ -30,11 +39,47 @@ function resetStats() {
 }
 
 function updateStats() {
-  statsEl.innerHTML = `
-    <span class="stat ok">${stats.ok} encontrados</span>
-    <span class="stat warn">${stats.warn} no encontrados</span>
-    <span class="stat err">${stats.err} errores</span>
-  `;
+  statsEl.querySelector('[data-filter="ok"]').textContent = `${stats.ok} CIV verificadas`;
+  statsEl.querySelector('[data-filter="warn"]').textContent = `${stats.warn} CIV no verificadas`;
+  statsEl.querySelector('[data-filter="err"]').textContent = `${stats.err} errores`;
+}
+
+function filterCategory(status) {
+  if (status === 'ENCONTRADO') return 'ok';
+  if (status === 'NO ENCONTRADO') return 'warn';
+  return 'err';
+}
+
+function statusClass(status) {
+  return filterCategory(status);
+}
+
+function displayStatus(result) {
+  if (result.status === 'ERROR' && result.error) {
+    return `ERROR: ${result.error}`;
+  }
+  return ExcelUtils.formatEstadoCiv(result.status, result.error);
+}
+
+function applyRowFilters() {
+  const rows = logBody.querySelectorAll('tr[data-filter]');
+  let visibleCount = 0;
+
+  rows.forEach((row) => {
+    const visible = activeFilters[row.dataset.filter];
+    row.hidden = !visible;
+    if (visible) visibleCount += 1;
+  });
+
+  const filterEmptyRow = logBody.querySelector('.filter-empty-row');
+  if (filterEmptyRow) filterEmptyRow.remove();
+
+  if (rows.length > 0 && visibleCount === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'empty-row filter-empty-row';
+    tr.innerHTML = '<td colspan="4">Ninguna categoría seleccionada. Activa al menos un filtro.</td>';
+    logBody.appendChild(tr);
+  }
 }
 
 function setProgress(current, total) {
@@ -44,26 +89,19 @@ function setProgress(current, total) {
   progressFill.style.width = `${percent}%`;
 }
 
-function statusClass(status) {
-  if (status === 'ENCONTRADO') return 'ok';
-  if (status === 'NO ENCONTRADO') return 'warn';
-  return 'err';
-}
-
 function appendLog(rowNumber, cedula, result) {
   const tr = document.createElement('tr');
-  const displayStatus = result.status === 'ERROR' && result.error
-    ? `ERROR: ${result.error}`
-    : result.status;
+  const category = filterCategory(result.status);
 
   const name = result.status === 'ENCONTRADO'
     ? `${result.primerApellido} ${result.segundoApellido}, ${result.nombres}`.trim()
     : '—';
 
+  tr.dataset.filter = category;
   tr.innerHTML = `
     <td>${rowNumber}</td>
     <td>${cedula}</td>
-    <td><span class="status-pill ${statusClass(result.status)}">${displayStatus}</span></td>
+    <td><span class="status-pill ${statusClass(result.status)}">${displayStatus(result)}</span></td>
     <td>${name}</td>
   `;
 
@@ -78,6 +116,7 @@ function appendLog(rowNumber, cedula, result) {
   else stats.err += 1;
 
   updateStats();
+  applyRowFilters();
 }
 
 function readWorkbookFromFile(file) {
@@ -115,6 +154,7 @@ function handleFile(file) {
   progressWrap.hidden = true;
   logBody.innerHTML = '<tr class="empty-row"><td colspan="4">Listo para procesar.</td></tr>';
   resetStats();
+  resetFilters();
 }
 
 async function consultCedula(cedula) {
@@ -141,10 +181,10 @@ async function processWorkbook() {
   progressWrap.hidden = false;
   logBody.innerHTML = '';
   resetStats();
+  resetFilters();
 
   try {
     workbook = await readWorkbookFromFile(selectedFile);
-    outputWorkbook = XLSX.utils.book_new();
 
     const sheetStates = workbook.SheetNames.map((sheetName) => {
       const worksheet = workbook.Sheets[sheetName];
@@ -181,10 +221,19 @@ async function processWorkbook() {
       }
     }
 
-    for (const sheet of sheetStates) {
-      const worksheet = XLSX.utils.aoa_to_sheet(sheet.rows);
-      XLSX.utils.book_append_sheet(outputWorkbook, worksheet, sheet.sheetName);
-    }
+    const splitSheets = ExcelUtils.buildSplitSheets(sheetStates);
+
+    outputWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      outputWorkbook,
+      XLSX.utils.aoa_to_sheet(splitSheets.verifiedRows),
+      splitSheets.verifiedSheetName,
+    );
+    XLSX.utils.book_append_sheet(
+      outputWorkbook,
+      XLSX.utils.aoa_to_sheet(splitSheets.pendingRows),
+      splitSheets.pendingSheetName,
+    );
 
     downloadBtn.disabled = false;
   } catch (error) {
@@ -224,6 +273,17 @@ function resetAll() {
   setProgress(0, 0);
   logBody.innerHTML = '<tr class="empty-row"><td colspan="4">Aún no hay consultas.</td></tr>';
   resetStats();
+  resetFilters();
+}
+
+function toggleFilter(filterKey) {
+  activeFilters[filterKey] = !activeFilters[filterKey];
+
+  const button = statsEl.querySelector(`[data-filter="${filterKey}"]`);
+  button.classList.toggle('active', activeFilters[filterKey]);
+  button.setAttribute('aria-pressed', String(activeFilters[filterKey]));
+
+  applyRowFilters();
 }
 
 fileInput.addEventListener('change', (event) => {
@@ -243,6 +303,12 @@ dropzone.addEventListener('drop', (event) => {
   event.preventDefault();
   dropzone.classList.remove('dragover');
   handleFile(event.dataTransfer.files[0]);
+});
+
+statsEl.addEventListener('click', (event) => {
+  const button = event.target.closest('.stat-filter');
+  if (!button) return;
+  toggleFilter(button.dataset.filter);
 });
 
 processBtn.addEventListener('click', processWorkbook);
